@@ -56,6 +56,10 @@ func ReadDefault(fname string) (*Config, error) {
 // * * *
 
 func (c *Config) read(buf *bufio.Reader) (err error) {
+	r, _, _ := buf.ReadRune()
+	if r != '\uFEFF' {
+		buf.UnreadRune() // Not a BOM -- put the rune back
+	}
 	var section, option string
 	var scanner = bufio.NewScanner(buf)
 	for scanner.Scan() {
@@ -88,9 +92,11 @@ func (c *Config) read(buf *bufio.Reader) (err error) {
 			// Option and value
 			case i > 0 && l[0] != ' ' && l[0] != '\t': // found an =: and it's not a multiline continuation
 				option = strings.TrimSpace(l[0:i])
-				value := strings.TrimSpace(l[i+1:])
-				c.AddOption(section, option, value)
-
+				// don't fail on cfg line 'foo=' without anything following the '=' sign
+				if len(l) > i+1 {
+					value := strings.TrimSpace(stripQuotes(l[i+1:]))
+					c.AddOption(section, option, value)
+				}
 			default:
 				return errors.New("could not parse line: " + l)
 			}
